@@ -1,0 +1,5 @@
+notion-client
+python-dotenv
+python-slugify
+PyYAML
+requests
