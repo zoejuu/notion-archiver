@@ -1,7 +1,10 @@
-import re, argparse, os
+import re, argparse, os, time, shutil, hashlib
 from pathlib import Path
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from notion_client import Client
+from slugify import slugify
+from python_notion_exporter import NotionExporter, ExportType, ViewExportType  # type: ignore
 
 # Compile a regex that finds a 32-character hexadecimal string (the raw Notion page ID without dashes).
 UUID_RE = re.compile(r"[0-9a-f]{32}", re.IGNORECASE)
@@ -49,14 +52,18 @@ def extract_page_id(notion_url: str) -> str:
 def get_created_time(page: str) -> str:
     """
     Extract the first created time of the notion page
-    """
-    from datetime import datetime
-    
+    """    
     created_time_str = page["created_time"]
     
     # Parse ISO format and format it in Australian standard
     dt = datetime.fromisoformat(created_time_str.replace('Z', '+00:00'))
     return dt.strftime("%d-%m-%Y %H:%M:%S")
+
+def get_page_title(page: str) -> str:
+    """
+    Extract the page title using notion API
+    """
+    return "".join([t["plain_text"] for t in page["properties"]["title"]["title"]]) or "untitled"
 
 def resolve_target_root() -> Path:
     """
@@ -86,6 +93,72 @@ def resolve_target_root() -> Path:
     
     return root
 
+def export_to_pdf(pid: str, target_root: Path, target_dir: str = "pdf") -> Path:
+    """
+    Export a single Notion page (by URL) to PDF using python-notion-exporter, then
+    move the PDF into: <target_root>/<target_dir>/<slug>.pdf
+
+    - Uses browser cookies from .env: NOTION_TOKEN_V2, NOTION_FILE_TOKEN
+    - Creates a staging folder: <target_root>/.notion-tmp/
+    - Skips overwrite if an identical PDF already exists (hash check)
+    """
+    # Get cookies (browser session) required by python-notion-exporter from .env
+    load_dotenv()
+    token_v2 = os.getenv("NOTION_TOKEN_V2")
+    file_token = os.getenv("NOTION_FILE_TOKEN")
+    if not token_v2 or not file_token:
+        raise SystemExit("Missing NOTION_TOKEN_V2 or NOTION_FILE_TOKEN in .env")
+
+    # Temporary staging path to write output
+    staging_root = (target_root / ".notion-tmp").resolve()
+    staging_root.mkdir(parents=True, exist_ok=True)
+    export_name = "export-" + hashlib.sha1(pid.encode()).hexdigest()[:8]
+    export_path = staging_root / export_name
+    export_path.mkdir(parents=True, exist_ok=True)
+
+    base_slug = slugify(pid)
+
+    # Initialise the exporter
+    exporter = NotionExporter(
+        token_v2=token_v2,
+        file_token=file_token,
+        pages={base_slug: pid.replace("-", "")},
+        export_directory=str(staging_root),
+        flatten_export_file_tree=True,
+        export_type=ExportType.PDF,
+        current_view_export_type=ViewExportType.CURRENT_VIEW,
+        include_files=False,
+        recursive=True,
+        workers=1,
+        export_name=export_name,
+    )
+    exporter.process()
+
+    # Format PDF name (title + created time)
+    notion_api = os.getenv("NOTION_TOKEN")
+    client = Client(auth=notion_api)
+    page = client.pages.retrieve(page_id=pid)
+    title = get_page_title(page)
+    created_time = get_created_time(page)
+    file_name = slugify(title+"-"+created_time)
+
+    # Final destination
+    final_dir = target_root / target_dir
+    final_dir.mkdir(parents=True, exist_ok=True)
+    dest = final_dir / f"{file_name}.pdf"
+
+    # Grab the output PDF and perform directory moving to the final destination (dest)
+    pdfs = sorted(export_path.rglob("*.pdf"), key=lambda p: p.stat().st_size, reverse=True)
+    if not pdfs:
+        raise RuntimeError(f"No PDF found after export in {export_path}")
+    staged_pdf = pdfs[0]
+
+    shutil.move(str(staged_pdf), str(dest))
+    shutil.rmtree(export_path, ignore_errors=True)
+    print(f"[ok] saved: {dest}")
+
+    return dest
+
 def main():
     """
     Entry point for the CLI.
@@ -108,21 +181,14 @@ def main():
     client = Client(auth=token)
 
     # Set up the argument parser with a user-friendly description
-    ap = argparse.ArgumentParser(
-        description = "Archive a Notion page into Markdown."
-    )
+    ap = argparse.ArgumentParser(description = "Export Notion page(s) to PDF.")
     ap.add_argument("urls", nargs="+", help="Notion page URL(s). Multiple URLs can be provided with space separation.")
     ap.add_argument("--dry-run", action="store_true", help="Only parse IDs and ping Notion") # Optional flag for dry run
     args = ap.parse_args()
 
     # Resolve where the files will be written
     target_root = resolve_target_root()
-    notes_root = target_root / os.getenv("NOTES_SUBDIR", "notes")
-    assets_root = target_root / os.getenv("ASSETS_SUBDIR", "assets")
-
-    # Ensure subfolders exist (safe to create).
-    notes_root.mkdir(parents=True, exist_ok=True)
-    assets_root.mkdir(parents=True, exist_ok=True)
+    target_dir = os.getenv("TARGET_SUBDIR", "pdfs")
 
     # Iterate over all URLs provided on the command line.
     for u in args.urls:
@@ -131,17 +197,16 @@ def main():
 
         # If --dry-run option is passed, do not write files; just verify access and show basic info.
         if args.dry_run:
-            print(f"[dry-run] page_id={pid}")
             page = client.pages.retrieve(page_id=pid)
 
-            title = "".join([t["plain_text"] for t in page["properties"]["title"]["title"]]) or "untitled"
-            print(f"[dry-run] title={title}")
+            print(f"[dry-run] page_id={pid}")
+            print(f"[dry-run] title={get_page_title(page)}")
             print(f"[dry-run] created_time={get_created_time(page)}")
             print(f"[dry-run] target_root={target_root}")
-
         else:
-            # Placeholder for the real work to be added in future milestones
-            print(f"TODO: convert {pid} -> Markdown into {notes_root} (assets → {assets_root})")
+            export_to_pdf(pid, target_root, target_dir = target_dir)
+        
+    print("\nNow review & commit your output repo.")
     
 if __name__ == "__main__":
     main()
