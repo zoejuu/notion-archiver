@@ -1,10 +1,10 @@
 import re, argparse, os, time, shutil, hashlib
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime
 from dotenv import load_dotenv
 from notion_client import Client
 from slugify import slugify
-from python_notion_exporter import NotionExporter, ExportType, ViewExportType  # type: ignore
+from python_notion_exporter import NotionExporter, ExportType, ViewExportType
 
 # Compile a regex that finds a 32-character hexadecimal string (the raw Notion page ID without dashes).
 UUID_RE = re.compile(r"[0-9a-f]{32}", re.IGNORECASE)
@@ -49,7 +49,7 @@ def extract_page_id(notion_url: str) -> str:
         raise ValueError(f"No UUID found in {notion_url}")
     return hyphenate(m.group(0))
 
-def get_created_time(page: str) -> str:
+def get_created_date(page: str) -> str:
     """
     Extract the first created time of the notion page
     """    
@@ -57,7 +57,7 @@ def get_created_time(page: str) -> str:
     
     # Parse ISO format and format it in Australian standard
     dt = datetime.fromisoformat(created_time_str.replace('Z', '+00:00'))
-    return dt.strftime("%d-%m-%Y %H:%M:%S")
+    return dt.strftime("%d/%m/%Y")
 
 def get_page_title(page: str) -> str:
     """
@@ -138,9 +138,7 @@ def export_to_pdf(pid: str, target_root: Path, target_dir: str = "pdf") -> Path:
     notion_api = os.getenv("NOTION_TOKEN")
     client = Client(auth=notion_api)
     page = client.pages.retrieve(page_id=pid)
-    title = get_page_title(page)
-    created_time = get_created_time(page)
-    file_name = slugify(title+"-"+created_time)
+    file_name = slugify(get_page_title(page)+"-"+get_created_date(page))
 
     # Final destination
     final_dir = target_root / target_dir
@@ -201,12 +199,11 @@ def main():
 
             print(f"[dry-run] page_id={pid}")
             print(f"[dry-run] title={get_page_title(page)}")
-            print(f"[dry-run] created_time={get_created_time(page)}")
-            print(f"[dry-run] target_root={target_root}")
+            print(f"[dry-run] created_date={get_created_date(page)}")
+            print(f"[dry-run] target_root={target_root}\n")
         else:
             export_to_pdf(pid, target_root, target_dir = target_dir)
-        
-    print("\nNow review & commit your output repo.")
+            print("\nNow review & commit your output repo.")
     
 if __name__ == "__main__":
     main()
