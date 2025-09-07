@@ -39,13 +39,26 @@ def extract_page_id(notion_url: str) -> str:
     Raises:
         ValueError: If no 32-hex page ID is found in the input URL.
     """
-    cleaned = notion_url.replace("-","")
+    pid = notion_url[-32:]
+    cleaned = pid.replace("-","")
     m=UUID_RE.search(cleaned)
     if not m:
         raise ValueError(f"No UUID found in {notion_url}")
     return hyphenate(m.group(0))
 
-def resolve_target_root():
+def get_created_time(page: str) -> str:
+    """
+    Extract the first created time of the notion page
+    """
+    from datetime import datetime
+    
+    created_time_str = page["created_time"]
+    
+    # Parse ISO format and format it in Australian standard
+    dt = datetime.fromisoformat(created_time_str.replace('Z', '+00:00'))
+    return dt.strftime("%d-%m-%Y %H:%M:%S")
+
+def resolve_target_root() -> Path:
     """
     Decide the git repo where notion pages will be archived.
     
@@ -57,6 +70,7 @@ def resolve_target_root():
         SystemExit: If the provided target path neither doesn't exist nor isn't a git repo
     """
     # Get the path from .env
+    load_dotenv()
     path_to_repo = os.getenv("TARGET_REPO_DIR")
     if not path_to_repo:
         raise SystemExit(
@@ -68,7 +82,7 @@ def resolve_target_root():
     if not root.exists():
         raise SystemExit(f"Target path does not exist: {root}")
     if not (root / ".git").exists():
-        raise SystemExit(f"Warning: {root} is not a git repo (no .git found).")
+        raise SystemExit(f"{root} is not a git repo (no .git found).")
     
     return root
 
@@ -122,9 +136,9 @@ def main():
 
             title = "".join([t["plain_text"] for t in page["properties"]["title"]["title"]]) or "untitled"
             print(f"[dry-run] title={title}")
+            print(f"[dry-run] created_time={get_created_time(page)}")
             print(f"[dry-run] target_root={target_root}")
-            print(f"[dry-run] notes_root={notes_root}")
-            print(f"[dry-run] assets_root={assets_root}")
+
         else:
             # Placeholder for the real work to be added in future milestones
             print(f"TODO: convert {pid} -> Markdown into {notes_root} (assets → {assets_root})")
