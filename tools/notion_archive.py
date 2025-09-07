@@ -1,4 +1,5 @@
 import re, argparse, os
+from pathlib import Path
 from dotenv import load_dotenv
 from notion_client import Client
 
@@ -44,6 +45,33 @@ def extract_page_id(notion_url: str) -> str:
         raise ValueError(f"No UUID found in {notion_url}")
     return hyphenate(m.group(0))
 
+def resolve_target_root():
+    """
+    Decide the git repo where notion pages will be archived.
+    
+    Returns:
+        The path to the git repo
+    
+    Raises:
+        SystemExit: If the target repo is not specified in .env
+        SystemExit: If the provided target path neither doesn't exist nor isn't a git repo
+    """
+    # Get the path from .env
+    path_to_repo = os.getenv("TARGET_REPO_DIR")
+    if not path_to_repo:
+        raise SystemExit(
+            "Missing target repo path. Set TARGET_REPO_DIR in .env\n"
+        )
+    root = Path(path_to_repo).expanduser().resolve()
+
+    # Ensure path exists and is a git repo
+    if not root.exists():
+        raise SystemExit(f"Target path does not exist: {root}")
+    if not (root / ".git").exists():
+        raise SystemExit(f"Warning: {root} is not a git repo (no .git found).")
+    
+    return root
+
 def main():
     """
     Entry point for the CLI.
@@ -73,6 +101,15 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="Only parse IDs and ping Notion") # Optional flag for dry run
     args = ap.parse_args()
 
+    # Resolve where the files will be written
+    target_root = resolve_target_root()
+    notes_root = target_root / os.getenv("NOTES_SUBDIR", "notes")
+    assets_root = target_root / os.getenv("ASSETS_SUBDIR", "assets")
+
+    # Ensure subfolders exist (safe to create).
+    notes_root.mkdir(parents=True, exist_ok=True)
+    assets_root.mkdir(parents=True, exist_ok=True)
+
     # Iterate over all URLs provided on the command line.
     for u in args.urls:
         # Extract a hyphenated page ID from the full Notion URL.
@@ -85,9 +122,12 @@ def main():
 
             title = "".join([t["plain_text"] for t in page["properties"]["title"]["title"]]) or "untitled"
             print(f"[dry-run] title={title}")
+            print(f"[dry-run] target_root={target_root}")
+            print(f"[dry-run] notes_root={notes_root}")
+            print(f"[dry-run] assets_root={assets_root}")
         else:
             # Placeholder for the real work to be added in future milestones
-            print(f"TODO: convert {pid} -> Markdown")
+            print(f"TODO: convert {pid} -> Markdown into {notes_root} (assets → {assets_root})")
     
 if __name__ == "__main__":
     main()
