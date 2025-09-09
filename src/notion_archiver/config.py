@@ -38,3 +38,17 @@ def get_target_repo() -> Path:
 def get_target_subdir() -> str:
     """Get target subdirectory for PDFs."""
     return os.getenv("TARGET_SUBDIR", "pdfs")
+
+def get_git_branch() -> str:
+    """Get target git branch."""
+    return os.getenv("TARGET_BRANCH", "main")
+
+def get_git_identity() -> tuple[str, str]:
+    """Get git user name and email."""
+    name = os.getenv("GIT_USER_NAME", "notion-archiver")
+    email = os.getenv("GIT_USER_EMAIL", "notion-archiver@example.com")
+    return name, email
+
+def should_auto_push() -> bool:
+    """Check if auto-push is enabled."""
+    return os.getenv("AUTO_PUSH", "0") == "1"
