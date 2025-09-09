@@ -48,6 +48,14 @@ def stage_and_commit(cwd: Path, file_path: Path, message: str) -> bool:
     print(f"[git] committed: {message}")
     return True
 
+def push_changes(cwd: Path, branch: str):
+    """Push changes to remote repository."""
+    try:
+        run(f"git push -u origin {branch}", cwd)
+        print(f"[git] pushed to origin/{branch}")
+    except subprocess.CalledProcessError as e:
+        print(f"[git] push failed: {e.stderr or e.stdout}")
+
 def auto_commit_pdf(target_root: Path, file_path: Path, commit_msg: str, branch: str = None):
     """Automatically commit PDF changes to git."""
     if branch is None:
@@ -56,5 +64,7 @@ def auto_commit_pdf(target_root: Path, file_path: Path, commit_msg: str, branch:
     ensure_git_identity(target_root)
     ensure_branch(target_root, branch)
     
-    stage_and_commit(target_root, file_path, commit_msg)
+    changed = stage_and_commit(target_root, file_path, commit_msg)
+    if changed and should_auto_push():
+        push_changes(target_root, branch)
 
