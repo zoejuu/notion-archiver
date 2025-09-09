@@ -3,6 +3,7 @@ from .config import load_config, get_target_repo
 from .utils import extract_page_id
 from .notion import get_page_info
 from .export import export_to_pdf
+from .gitops import auto_commit_pdf
 
 def main():
     """
@@ -13,7 +14,7 @@ def main():
     - For each URL:
         * Extracts the page ID.
         * If --dry-run: performs a light API call to verify access and prints the title.
-        * Else: prints a TODO (to be implemented in later milestones).
+        * Else: export PDF file of the notion page & commit it to git
     """
     load_config()
 
@@ -27,15 +28,20 @@ def main():
     for u in args.urls:
         # Extract a hyphenated page ID from the full Notion URL.
         pid = extract_page_id(u)
+        title, created_date = get_page_info(pid)
 
         # If --dry-run option is passed, do not write files; just verify access and show basic info.
         if args.dry_run:
-            title, created_date = get_page_info(pid)
             print(f"[dry-run] page_id={pid}")
             print(f"[dry-run] title={title}")
             print(f"[dry-run] created_date={created_date}")
             print(f"[dry-run] target_root={get_target_repo()}\n")
         else:
-            export_to_pdf(pid)
+            # Export to PDF
+            dest = export_to_pdf(pid)
+
+            # Auto-commit to git
+            commit_msg = f'backup: upload notes of - {title}'
+            auto_commit_pdf(get_target_repo(), dest, commit_msg)
     
     print("\nNow review & commit your output repo.")
