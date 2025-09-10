@@ -22,6 +22,7 @@ def main():
     ap = argparse.ArgumentParser(description = "Export Notion page(s) to PDF.")
     ap.add_argument("urls", nargs="+", help="Notion page URL(s). Multiple URLs can be provided with space separation.")
     ap.add_argument("--dry-run", action="store_true", help="basic API call only to verify access to the provided notion page and speficied repository") # Optional flag for dry run
+    ap.add_argument("-p", "--push", action="store_true", help="enable auto push") # Optional flag for auto push
     args = ap.parse_args()
 
     # Iterate over all URLs provided on the command line.
@@ -41,7 +42,11 @@ def main():
             dest = export_to_pdf(pid)
 
             # Auto-commit to git
+            should_auto_push = args.push
             commit_msg = f'backup: upload notes of - {title}'
-            auto_commit_pdf(get_target_repo(), dest, commit_msg)
+            auto_commit_pdf(get_target_repo(), dest, commit_msg, should_auto_push)
     
-    print("\nBackup Successful!")
+    if args.dry_run:
+        print("✅ Dry run completed - all checks passed!")
+    else:
+        print("✅ Backup completed - files exported and committed!")

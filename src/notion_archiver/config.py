@@ -48,7 +48,3 @@ def get_git_identity() -> tuple[str, str]:
     name = os.getenv("GIT_USER_NAME", "notion-archiver")
     email = os.getenv("GIT_USER_EMAIL", "notion-archiver@example.com")
     return name, email
-
-def should_auto_push() -> bool:
-    """Check if auto-push is enabled."""
-    return os.getenv("AUTO_PUSH", "0") == "1"

@@ -1,7 +1,7 @@
 import os
 import subprocess
 from pathlib import Path
-from .config import get_git_identity, get_git_branch, should_auto_push
+from .config import get_git_identity, get_git_branch
 
 def run(cmd: str, cwd: Path) -> subprocess.CompletedProcess:
     """Run git command and return result."""
@@ -56,7 +56,7 @@ def push_changes(cwd: Path, branch: str):
     except subprocess.CalledProcessError as e:
         print(f"[git] push failed: {e.stderr or e.stdout}")
 
-def auto_commit_pdf(target_root: Path, file_path: Path, commit_msg: str, branch: str = None):
+def auto_commit_pdf(target_root: Path, file_path: Path, commit_msg: str, should_auto_push: bool, branch: str = None):
     """Automatically commit PDF changes to git."""
     if branch is None:
         branch = get_git_branch()
@@ -65,6 +65,5 @@ def auto_commit_pdf(target_root: Path, file_path: Path, commit_msg: str, branch:
     ensure_branch(target_root, branch)
     
     changed = stage_and_commit(target_root, file_path, commit_msg)
-    if changed and should_auto_push():
+    if changed and should_auto_push:
         push_changes(target_root, branch)
-
