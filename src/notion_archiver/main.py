@@ -44,4 +44,4 @@ def main():
             commit_msg = f'backup: upload notes of - {title}'
             auto_commit_pdf(get_target_repo(), dest, commit_msg)
     
-    print("\nNow review & commit your output repo.")
+    print("\nBackup Successful!")
