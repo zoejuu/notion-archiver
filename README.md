@@ -180,6 +180,12 @@ This project is licensed under the MIT License.
 **Hayeon Ju** - [GitHub](https://github.com/zoejuu)
 
 
+## Credits
+
+- python-notion-exporter — Used for exporting Notion pages to PDF.  
+  Repo: https://github.com/Strvm/python-notion-exporter.git 
+  License: MIT
+
 ## Changelog
 
 ### v0.1.0
